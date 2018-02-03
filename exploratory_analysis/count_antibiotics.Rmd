@@ -1,0 +1,96 @@
+---
+title: "count_antibiotics"
+author: "Tarun"
+date: "1/31/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load libaries and establish connection
+```{r}
+library(DBI)
+library(RMySQL)
+library(dplyr)
+library(stringdist)
+library(data.table)
+
+con <- dbConnect(MySQL(),  
+                 user="tnarasim",
+                 password="XM812Ohq-TTz", 
+                 host="shahlab-db1.stanford.edu", 
+                 port=3306
+)
+```
+
+# Count the proportion of BSAs in dictionary
+```{r}
+rs1 <- dbSendQuery(con, 
+                  "SELECT * FROM stride7.dictionary_medications_SHC_EPIC;")
+
+dict_df <- dbFetch(rs1, n = Inf)
+
+```
+
+```{r}
+# Exact string matching
+checkVec <- tolower(dict_df$rxcui_str)
+
+total_bsa_dict <- sum(checkVec %in% all_bsa )
+prop_bsa_dict <- total_bsa_dict/length(checkVec)
+
+num_bsa_dict <- sum( all_bsa %in% checkVec )
+all_bsa[all_bsa %in% checkVec]
+
+uniqueM <- unique( checkVec[ checkVec %in% all_bsa  ]  )
+```
+
+
+```{r}
+# Approximate string matching
+amatch(x="Gentamycin", table="Gentamicin A", maxDist = 3)
+
+max_dist <- 3
+matchVec <- !is.na( amatch(x=checkVec, table=all_bsa,method='lv',maxDist=max_dist) )
+matchVecRev <- !is.na( amatch(x=all_bsa, table=checkVec,method='lv',maxDist=max_dist) )
+  
+total_app_bsa_dict <- sum( matchVec  )
+prop_app_bsa_dict <- total_app_bsa_dict/length(checkVec)
+
+num_app_bsa_dict <- sum( matchVecRev   )
+all_bsa[ matchVecRev ]
+```
+
+```{r}
+unique_meds <- sort( unique( checkVec[ matchVec  ] ) )
+unique_meds
+length(unique_meds)
+
+write.csv(unique_meds, file = "/Users/Tarun/Documents/BIO_RESEARCH/exploratory_analysis/uniqueMeds.csv")
+```
+
+
+# Count the proportion of BSAs actually ordered
+```{r}
+rs2 <- dbSendQuery(con, 
+                  "SELECT rxcui_str
+                  FROM stride7.SHC_med_de
+                  INNER JOIN stride7.dictionary_medications_SHC_EPIC 
+                  ON stride7.SHC_med_de.medication_id=stride7.dictionary_medications_SHC_EPIC.medication_id ; ")
+
+med_dict_df <- dbFetch(rs2, n = 100000)
+
+```
+
+```{r}
+checkVec <- tolower(med_dict_df$rxcui_str)
+
+total_bsa_med <- sum(checkVec %in% all_bsa )
+prop_bsa_med <- total_bsa_med/length(checkVec)
+
+num_bsa_med <- sum( all_bsa %in% checkVec )
+
+```
+

@@ -1,0 +1,73 @@
+---
+title: "antibiotic_code"
+author: "Tarun"
+date: "1/28/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(dplyr)
+library(data.table)
+```
+
+```{r}
+# 1. 'grep' first pass from CARD
+aro <- read.csv("./card-data/aro.csv",header=T)
+aro$Description <- tolower(aro$Description)
+broad_spec <- filter(aro,
+                     ((Description %like% "broad-spectrum" | Description %like% "broad spectrum") & (Description %like% "antibiotic")))
+nrow(broad_spec)
+```
+
+
+```{r}
+# 2. Danish paper
+danish_df <- read.csv("danish_molecules.csv")
+danish_df <- danish_df %>% 
+  filter(broad=="x") %>% 
+  select(name) %>% 
+  mutate(name = recode(name, "tetracyclines" = "tetracycline" ) )
+
+broad_danish <- danish_df$name
+length(broad_danish)
+```
+
+
+```{r}
+# Union the two
+b1_name <- broad_spec$Name
+union_bsa <- union(b1_name,broad_danish)
+
+sort(union_bsa)
+```
+
+```{r}
+# Fix the antibiotic list
+addList <- c("clavulanic acid","piperacillin", "tazobactam", "sulfamethoxazole", "trimethoprim" )
+temp_bsa <- c(union_bsa, addList)
+
+removeList <- c( "beta-lactamase", "antibiotic sensitive enoyl-acyl carrier reductase", "antibiotic resistant katG", "amoxicillin-clavulanic acid")
+all_bsa <- temp_bsa[!( temp_bsa %in% removeList )]
+
+sort(all_bsa)
+```
+
+
+```{r}
+# JSON data
+## Broad-spectrum
+# json_df <- read.csv('./output_broad_spectrum.csv', header=F)
+# json_df <- as.data.frame(t(as.matrix(json_df)))
+# 
+# # setdiff
+# setdiff_123 <- setdiff(json_df$V1, union_12)
+# sort(setdiff_123)
+```
+
+
+

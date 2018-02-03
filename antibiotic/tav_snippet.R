@@ -1,0 +1,5 @@
+library(dplyr)
+library(data.table)
+aro <- read.csv("D:/card/aro.csv",header=T)
+aro$Description <- tolower(aro$Description)
+broad_spec <- dplyr::filter(aro,((Description %like% "broad-spectrum" | Description %like% "broad spectrum") & (Description %like% "antibiotic")))

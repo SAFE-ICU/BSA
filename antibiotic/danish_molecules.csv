@@ -1,0 +1,77 @@
+﻿name,narrow,broad
+Antibiotics,,
+vancomycin (oral),x,
+Tetracyclines,,
+doxycycline,,x
+lymecycline,,x
+tetracyclines,,x
+tigecycline,,x
+Penicillins with extended spectrum,,
+ampicillin,,x
+pivampicillin,,x
+amoxicillin,,x
+pivmecillinam,,x
+mecillinam,,x
+Beta-lactamase sensitive penicillins,,
+benzylpenicillin,x,
+phenoxymethylpenicillin,x,
+Beta-lactamase resistant penicillins,,
+dicloxacillin,x,
+flucloxacillin,x,
+"Combinations of penicillins, incl. beta-lactamase inhibitors",,
+amoxicillin-clavulanic acid,,x
+piperacillin-tazobactam,,x
+First-generation cephalosporins,,
+cephalexine,x,
+Second-generation cephalosporins,,
+cefuroxime,,x
+Third-generation cephalosporins,,
+cefotaxime,,x
+ceftazidime,,x
+ceftriaxone,,x
+Monobactams,,
+aztreonam,x,
+Carbapenems,,
+meropenem,,x
+ertapenem,,x
+Trimethoprim,,
+trimethoprim,x,
+Sulfonamides,,
+sulfamethizole,x,
+(continued),,
+Sulfonamides + Trimethoprim,,
+sulfamethoxazole + trimethoprim,,x
+Macrolides,,
+erythromycin,x,
+roxithromycin,x,
+clarithromycin,x,
+azithromycin,x,
+Lincosamides,,
+clindamycin,x,
+Aminoglycosides,,
+tobramycin,,x
+gentamicin,,x
+Fluoroquinolones,,
+ofloxacin,,x
+ciprofloxacin,,x
+moxifloxacin,,x
+Glycopeptides,,
+vancomycin (intravenous),x,
+teicoplanin,x,
+Polymyxins,,
+colistinmethatnatrium,,x
+Steroid antibacterials,,
+fusidic acid,x,
+Imidazole derivates,,
+metronidazole (intravenous),x,
+Nitrofuran derivates,,
+nitrofurantoin,x,
+Other antibacterials,,
+linezolide,x,
+daptomycin,x,
+Drug for treatment of tuberculosis,,
+rifampicin,x,
+rifabutin,x,
+Nitroimidazole derivatives,,
+"metronidazole (oral, rectal)",x,
+,,
