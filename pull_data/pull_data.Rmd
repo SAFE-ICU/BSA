@@ -1,0 +1,32 @@
+---
+title: "pull_data"
+author: "Tarun"
+date: "2/5/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(DBI)
+library(RMySQL)
+library(dplyr)
+
+con <- dbConnect(MySQL(),  
+                 user="tnarasim",
+                 password="XM812Ohq-TTz", 
+                 host="shahlab-db1.stanford.edu", 
+                 port=3306
+)
+
+```
+
+```{r}
+rs1 <- dbSendQuery(con, 
+                  "SELECT * FROM stride7.dictionary_medications_SHC_EPIC;")
+
+dict_df <- dbFetch(rs1, n = Inf)
+```
+
