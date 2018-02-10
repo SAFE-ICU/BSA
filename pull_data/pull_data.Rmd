@@ -23,10 +23,69 @@ con <- dbConnect(MySQL(),
 
 ```
 
-```{r}
-rs1 <- dbSendQuery(con, 
-                  "SELECT * FROM stride7.dictionary_medications_SHC_EPIC;")
 
-dict_df <- dbFetch(rs1, n = Inf)
+# Pull first inpatient visit of every patient
+## Table: SHC_visit_de
+
+```{r}
+
+rs1 <- dbSendQuery(con, 
+"SELECT 
+    `SHC_visit_de`.`patient_id`,
+    `SHC_visit_de`.`contact_date`,
+    `SHC_visit_de`.`enc_type_c`,
+    `SHC_visit_de`.`department_id`,
+    `SHC_visit_de`.`hosp_admsn_type_c`,
+    `SHC_visit_de`.`visit_fc`,
+    `SHC_visit_de`.`hosp_admsn_time`,
+    `SHC_visit_de`.`hosp_disch_time`
+FROM
+    `stride7`.`SHC_visit_de`
+WHERE
+    YEAR(hosp_admsn_time) >= 2009
+        AND hosp_admsn_time != '0000-00-00'
+        AND hosp_disch_time != '0000-00-00';"       
+)
+
+visit_df <- dbFetch(rs1, n = Inf)
+dim(visit_df)
+
+first_visit_df <- visit_df %>% 
+  group_by(patient_id) %>% 
+  filter(hosp_admsn_time == min(hosp_admsn_time)) %>% 
+  filter(row_number(patient_id) == 1)
+
+dim(first_visit_df)
 ```
+
+## Check against the SHC_visit_de table
+
+```{r}
+rs1 <- dbSendQuery(con,
+"SELECT 
+    `SHC_ADT_de`.`patient_id`, 
+    `SHC_ADT_de`.`event_time`
+FROM
+    `stride7`.`SHC_ADT_de`
+WHERE
+        event_type_c=1 
+OR      
+        event_type_c=2; "   
+)
+
+adt_df <- dbFetch(rs1, n=Inf)
+
+adt_df_uniq <- adt_df %>% 
+  group_by(patient_id) %>% 
+  filter(row_number(patient_id)==1) 
+
+print(paste0("Row # ADT unique: ", dim(adt_df_uniq)[1] ) )
+
+first_visit_df_filt <- first_visit_df %>% 
+  inner_join(adt_df_uniq, by = c("patient_id" = "patient_id")) 
+
+print(paste0("Row # first_visit_df_filt unique: ", dim(first_visit_df_filt)[1] ) )
+
+```
+
 
