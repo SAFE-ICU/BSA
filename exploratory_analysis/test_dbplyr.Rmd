@@ -1,0 +1,43 @@
+---
+title: "test dbplyr"
+output: html_notebook
+---
+
+```{r}
+library(dbplyr)
+library(RMySQL)
+library(dplyr)
+
+conn <- DBI::dbConnect(MySQL(),  
+                 user="tnarasim",
+                 password=rstudioapi::askForPassword("Database password"), 
+                 host="shahlab-db1.stanford.edu", 
+                 port=3306, 
+                 db="stride7"
+)
+
+```
+
+
+```{r}
+# List all tables
+dbListTables(conn)
+```
+
+```{r}
+# try a filter
+ICU_SHC_No_PACU <- c("2000251","2000254","2000255","2000262","9992000")
+adt_icu <- conn %>%
+  tbl("SHC_ADT_de") %>%
+  filter(department_id %in% ICU_SHC_No_PACU) %>%
+  collect()
+
+dim(adt_icu) 
+```
+
+
+
+```{r}
+dbDisconnect(conn)
+```
+

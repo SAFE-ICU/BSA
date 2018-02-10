@@ -24,12 +24,14 @@ con <- dbConnect(MySQL(),
 ```
 
 
-# Pull first inpatient visit of every patient
-## Table: SHC_visit_de
+# Pull all data
 
 ```{r}
 
-rs1 <- dbSendQuery(con, 
+## Pull first inpatient visit of every patient
+### SHC_visit_de
+
+visit_df <- dbGetQuery(con, 
 "SELECT 
     `SHC_visit_de`.`patient_id`,
     `SHC_visit_de`.`contact_date`,
@@ -47,21 +49,12 @@ WHERE
         AND hosp_disch_time != '0000-00-00';"       
 )
 
-visit_df <- dbFetch(rs1, n = Inf)
 dim(visit_df)
 
-first_visit_df <- visit_df %>% 
-  group_by(patient_id) %>% 
-  filter(hosp_admsn_time == min(hosp_admsn_time)) %>% 
-  filter(row_number(patient_id) == 1)
+## Pull ADT table
+### SHC_ADT_de
 
-dim(first_visit_df)
-```
-
-## Filter against the SHC_visit_de table
-
-```{r}
-rs1 <- dbSendQuery(con,
+adt_df <- dbGetQuery(con,
 "SELECT 
     `SHC_ADT_de`.`patient_id`, 
     `SHC_ADT_de`.`event_time`
@@ -73,8 +66,22 @@ OR
         event_type_c=2; "   
 )
 
-adt_df <- dbFetch(rs1, n=Inf)
+dbDisconnect(con)
+```
 
+# Pull first visit for each unique patient
+```{r}
+first_visit_df <- visit_df %>% 
+  group_by(patient_id) %>% 
+  filter(hosp_admsn_time == min(hosp_admsn_time)) %>% 
+  filter(row_number(patient_id) == 1)
+
+dim(first_visit_df)
+```
+
+# Filter against the SHC_visit_de table
+
+```{r}
 adt_df_uniq <- adt_df %>% 
   group_by(patient_id) %>% 
   filter(row_number(patient_id)==1) 
@@ -94,9 +101,27 @@ print(paste0("Row # first_visit_df_filt unique: ", dim(first_visit_df_filt)[1] )
 ```{r}
 ICU_SHC_No_PACU <- c("2000251","2000254","2000255","2000262","9992000")
  
-ADT_ICU_Data <- con %>%
-  tbl("SHC_ADT_de") %>%
-  filter(department_id %in% ICU_SHC_No_PACU) %>%
-  collect()
+adt_icu_df <- dbGetQuery(con,
+"SELECT 
+    patient_id, 
+    event_type_c, 
+    department_id, 
+    base_pat_class_c
+FROM
+    `stride7`.`SHC_ADT_de`
+WHERE
+    department_id IN 
+       ('2000251' , 
+        '2000254',
+        '2000255',
+        '2000262',
+        '9992000');  
+        "   
+)
+
+adt_icu_filt <- adt_icu_df %>%
+  filter(event_type_c==3 | event_type_c==4)
+
+dim(adt_icu_filt)
 ```
 
