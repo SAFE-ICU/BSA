@@ -19,7 +19,7 @@ library(data.table)
 
 con <- dbConnect(MySQL(),  
                  user="tnarasim",
-                 password="XM812Ohq-TTz", 
+                 password=rstudioapi::askForPassword("Database password"), 
                  host="shahlab-db1.stanford.edu", 
                  port=3306
 )
