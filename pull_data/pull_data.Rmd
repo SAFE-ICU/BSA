@@ -18,7 +18,8 @@ con <- dbConnect(MySQL(),
                  user="tnarasim",
                  password=rstudioapi::askForPassword("Database password"), 
                  host="shahlab-db1.stanford.edu", 
-                 port=3306
+                 port=3306,
+                 db = "stride7"
 )
 
 ```
@@ -100,28 +101,26 @@ print(paste0("Row # first_visit_df_filt unique: ", dim(first_visit_df_filt)[1] )
 
 ```{r}
 ICU_SHC_No_PACU <- c("2000251","2000254","2000255","2000262","9992000")
- 
-adt_icu_df <- dbGetQuery(con,
-"SELECT 
-    patient_id, 
-    event_type_c, 
-    department_id, 
-    base_pat_class_c
-FROM
-    `stride7`.`SHC_ADT_de`
-WHERE
-    department_id IN 
-       ('2000251' , 
-        '2000254',
-        '2000255',
-        '2000262',
-        '9992000');  
-        "   
-)
 
-adt_icu_filt <- adt_icu_df %>%
-  filter(event_type_c==3 | event_type_c==4)
+adt_icu_df <- con %>% 
+  tbl("SHC_ADT_de") %>%
+  filter(department_id %in% ICU_SHC_No_PACU) %>%
+  select(patient_id, 
+         event_type_c, 
+         department_id, 
+         base_pat_class_c, 
+         event_time) %>% 
+  filter(event_type_c==3 | event_type_c==4) %>% 
+  collect()
+  
 
-dim(adt_icu_filt)
+dim(adt_icu_df)
+
+adt_icu_uniq <- adt_icu_df %>% 
+  group_by(patient_id) %>% 
+  filter(event_time == min(event_time)) %>% 
+  filter(row_number(patient_id) == 1)
+
+print(paste0("Number of unique ICU first visits: ", dim(adt_icu_uniq)[1]))
 ```
 
