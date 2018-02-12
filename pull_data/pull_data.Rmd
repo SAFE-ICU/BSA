@@ -14,6 +14,7 @@ library(dbplyr)
 library(RMySQL)
 library(dplyr)
 library(tidyr)
+library(lubridate)
 
 con <- dbConnect(MySQL(),  
                  user="tnarasim",
@@ -68,7 +69,7 @@ OR
         event_type_c=2; "   
 )
 
-dbDisconnect(con)
+# dbDisconnect(con)
 ```
 
 # Pull first visit for each unique patient
@@ -91,7 +92,10 @@ adt_df_uniq <- adt_df %>%
 print(paste0("Row # ADT unique: ", dim(adt_df_uniq)[1] ) )
 
 first_visit_df_filt <- first_visit_df %>% 
-  inner_join(adt_df_uniq, by = c("patient_id" = "patient_id")) 
+  inner_join(adt_df_uniq, by = c("patient_id" = "patient_id")) %>% 
+  ungroup() %>% 
+  mutate(hosp_admsn_time = as.POSIXct(hosp_admsn_time)) %>% 
+  mutate(hosp_disch_time = as.POSIXct(hosp_disch_time))
 
 print(paste0("Row # first_visit_df_filt unique: ", dim(first_visit_df_filt)[1] ) )
 
@@ -144,7 +148,8 @@ adt_icu_uniq <- adt_icu_df %>%
   filter(n()==2) %>%  # keep only patients with exit AND entry
   filter( first(department_id) == last(department_id) ) %>%  # keep pats that enter/exit same dept
   select(-exitIndic) %>% 
-  spread(entryIndic, event_time )
+  spread(entryIndic, event_time ) %>% 
+  ungroup()
 
 print(paste0("Number of unique ICU first visits: ", dim(adt_icu_uniq)[1]))
 ```
@@ -153,7 +158,43 @@ print(paste0("Number of unique ICU first visits: ", dim(adt_icu_uniq)[1]))
 ## Table: SHC_med_de
 
 ```{r}
-med <- con %>% 
-  tbl("SHC_med_de")
+
+# Merge on by patient ID
+medications_df <- con %>% 
+  tbl("SHC_med_de") %>% 
+  select(patient_id, 
+          medication_id, 
+          order_time) %>% 
+  collect() %>% 
+  inner_join(first_visit_df_filt, by = c("patient_id" = "patient_id")) %>% 
+  mutate(order_time = as.POSIXct(order_time)) %>% # Fix the time variables
+  mutate(order_time = floor_date(order_time, unit="days")) %>% 
+  # mark which medications were inpatient
+  mutate(inpat_med = (hosp_admsn_time <= order_time & hosp_disch_time >= order_time))
+  
+write.csv(medications_df, file = "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv")
+
+# what proportion of medications found were assigned in first inpatient visit
+sum(foo2$inpat_med)/nrow(foo2) 
+
+# Merge on the medications dictionary
+## medication_id links SHC_med_de to dictionary_medications_SHC_EPIC
+med_dict_df <- con %>%
+  tbl("dictionary_medications_SHC_EPIC") %>%
+  select(rxcui_str, medication_id) %>% 
+  arrange(medication_id,rxcui_str) %>% 
+  collect() %>% 
+  mutate(n = 1) %>% 
+  spread(rxcui_str, n)
+  
+
+# merge test onto foo2
+med_and_dict_df <- medications_df %>% 
+  inner_join(med_dict_df, by = "medication_id")
+
+dim(med_and_dict_df)
+
+# figure out where event_time is coming from
+# check out count and tally
 ```
 
