@@ -10,9 +10,10 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-library(DBI)
+library(dbplyr)
 library(RMySQL)
 library(dplyr)
+library(tidyr)
 
 con <- dbConnect(MySQL(),  
                  user="tnarasim",
@@ -96,6 +97,7 @@ print(paste0("Row # first_visit_df_filt unique: ", dim(first_visit_df_filt)[1] )
 
 ```
 
+
 # Grab ICU data
 ## Table: SHC_ADT_de 
 
@@ -108,19 +110,50 @@ adt_icu_df <- con %>%
   select(patient_id, 
          event_type_c, 
          department_id, 
-         base_pat_class_c, 
          event_time) %>% 
   filter(event_type_c==3 | event_type_c==4) %>% 
+  arrange(patient_id, event_time) %>% 
   collect()
   
 
 dim(adt_icu_df)
+print(paste0("Number of unique ICU patients: ", n_distinct(adt_icu_df$patient_id)))
+# View(filter(adt_icu_uniq, patient_id==425 | patient_id==1657))
+
 
 adt_icu_uniq <- adt_icu_df %>% 
+  mutate(entry = event_type_c==3) %>% 
+  group_by(patient_id, entry) %>% 
+  mutate( entryIndic = row_number(patient_id) == 1 & entry==1 ) %>% 
+  ungroup() %>% group_by(patient_id) %>% 
+  mutate(entryTime = ifelse(entryIndic==1, event_time, NA) ) %>% # find first entry time
+  arrange(patient_id, entryTime) %>% 
+  mutate(entryTime = first(entryTime)) %>% 
+  filter( event_time > entryTime | entry==1 ) %>% 
+  arrange(patient_id, event_time) %>% 
+  ungroup() %>% group_by(patient_id, entry) %>%  # define exit time
+  mutate(exitIndic = row_number(patient_id)==1 & entry==0 & event_time > entryTime) %>% 
+  ungroup() %>% 
+  filter(entryIndic == T | exitIndic == T) %>% 
+  select(patient_id, 
+         entryIndic, 
+         exitIndic, 
+         event_time, 
+         department_id) %>% 
   group_by(patient_id) %>% 
-  filter(event_time == min(event_time)) %>% 
-  filter(row_number(patient_id) == 1)
+  filter(n()==2) %>%  # keep only patients with exit AND entry
+  filter( first(department_id) == last(department_id) ) %>%  # keep pats that enter/exit same dept
+  select(-exitIndic) %>% 
+  spread(entryIndic, event_time )
 
 print(paste0("Number of unique ICU first visits: ", dim(adt_icu_uniq)[1]))
+```
+
+# Merge in medicine data 
+## Table: SHC_med_de
+
+```{r}
+med <- con %>% 
+  tbl("SHC_med_de")
 ```
 
