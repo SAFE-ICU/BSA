@@ -155,7 +155,7 @@ print(paste0("Number of unique ICU first visits: ", dim(adt_icu_uniq)[1]))
 ```
 
 # Merge in medicine data 
-## Table: SHC_med_de
+## Tables: SHC_med_de, dictionary_medications_SHC_EPIC
 
 ```{r}
 
@@ -175,8 +175,10 @@ medications_df <- con %>%
 write.csv(medications_df, file = "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv")
 
 # what proportion of medications found were assigned in first inpatient visit
-sum(foo2$inpat_med)/nrow(foo2) 
+sum(medications_df$inpat_med)/nrow(medications_df) 
 
+
+read.csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv")
 # Merge on the medications dictionary
 ## medication_id links SHC_med_de to dictionary_medications_SHC_EPIC
 med_dict_df <- con %>%
@@ -188,11 +190,13 @@ med_dict_df <- con %>%
   spread(rxcui_str, n)
   
 
-# merge test onto foo2
+# merge medications dictionary onto medications-visit data
+ptm <- proc.time() # Start the clock!
 med_and_dict_df <- medications_df %>% 
   inner_join(med_dict_df, by = "medication_id")
 
 dim(med_and_dict_df)
+proc.time() - ptm
 
 # figure out where event_time is coming from
 # check out count and tally
