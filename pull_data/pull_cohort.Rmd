@@ -1,0 +1,227 @@
+---
+title: "pull_data"
+author: "Tarun"
+date: "2/5/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dbplyr)
+library(RMySQL)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(readr)
+
+con <- dbConnect(MySQL(),  
+                 user="tnarasim",
+                 password=rstudioapi::askForPassword("Database password"), 
+                 host="shahlab-db1.stanford.edu", 
+                 port=3306,
+                 db = "stride7"
+)
+
+```
+
+
+# Pull all data
+
+```{r}
+
+## Pull first inpatient visit of every patient
+### SHC_visit_de
+
+visit_df <- dbGetQuery(con, 
+"SELECT 
+    `SHC_visit_de`.`patient_id`,
+    `SHC_visit_de`.`contact_date`,
+    `SHC_visit_de`.`enc_type_c`,
+    `SHC_visit_de`.`department_id`,
+    `SHC_visit_de`.`hosp_admsn_type_c`,
+    `SHC_visit_de`.`visit_fc`,
+    `SHC_visit_de`.`hosp_admsn_time`,
+    `SHC_visit_de`.`hosp_disch_time`
+FROM
+    `stride7`.`SHC_visit_de`
+WHERE
+    YEAR(hosp_admsn_time) >= 2009
+        AND hosp_admsn_time != '0000-00-00'
+        AND hosp_disch_time != '0000-00-00';"       
+)
+
+dim(visit_df)
+
+## Pull ADT table
+### SHC_ADT_de
+
+adt_df <- dbGetQuery(con,
+"SELECT 
+    `SHC_ADT_de`.`patient_id`, 
+    `SHC_ADT_de`.`event_time`
+FROM
+    `stride7`.`SHC_ADT_de`
+WHERE
+        event_type_c=1 
+OR      
+        event_type_c=2; "   
+)
+
+# dbDisconnect(con)
+```
+
+# Pull first visit for each unique patient
+```{r}
+first_visit_df <- visit_df %>% 
+  group_by(patient_id) %>% 
+  filter(hosp_admsn_time == min(hosp_admsn_time)) %>% 
+  filter(row_number(patient_id) == 1)
+
+dim(first_visit_df)
+```
+
+# Filter against the SHC_visit_de table
+
+```{r}
+adt_df_uniq <- adt_df %>% 
+  group_by(patient_id) %>% 
+  filter(row_number(patient_id)==1) 
+
+print(paste0("Row # ADT unique: ", dim(adt_df_uniq)[1] ) )
+
+first_visit_df_filt <- first_visit_df %>% 
+  inner_join(adt_df_uniq, by = c("patient_id" = "patient_id")) %>% 
+  ungroup() %>% 
+  mutate(hosp_admsn_time = as.POSIXct(hosp_admsn_time)) %>% 
+  mutate(hosp_disch_time = as.POSIXct(hosp_disch_time))
+
+write.csv(first_visit_df_filt, file = "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/first_visit_df_filt.csv")
+
+print(paste0("Row # first_visit_df_filt unique: ", dim(first_visit_df_filt)[1] ) )
+
+```
+
+
+# Grab ICU data
+## Table: SHC_ADT_de 
+
+```{r}
+ICU_SHC_No_PACU <- c("2000251","2000254","2000255","2000262","9992000")
+
+adt_icu_df <- con %>% 
+  tbl("SHC_ADT_de") %>%
+  filter(department_id %in% ICU_SHC_No_PACU) %>%
+  select(patient_id, 
+         event_type_c, 
+         department_id, 
+         event_time) %>% 
+  filter(event_type_c==3 | event_type_c==4) %>% 
+  arrange(patient_id, event_time) %>% 
+  collect()
+  
+
+dim(adt_icu_df)
+print(paste0("Number of unique ICU patients: ", n_distinct(adt_icu_df$patient_id)))
+# View(filter(adt_icu_uniq, patient_id==425 | patient_id==1657))
+
+
+adt_icu_uniq <- adt_icu_df %>% 
+  mutate(entry = event_type_c==3) %>% 
+  group_by(patient_id, entry) %>% 
+  mutate( entryIndic = row_number(patient_id) == 1 & entry==1 ) %>% 
+  ungroup() %>% group_by(patient_id) %>% 
+  mutate(entryTime = ifelse(entryIndic==1, event_time, NA) ) %>% # find first entry time
+  arrange(patient_id, entryTime) %>% 
+  mutate(entryTime = first(entryTime)) %>% 
+  filter( event_time > entryTime | entry==1 ) %>% 
+  arrange(patient_id, event_time) %>% 
+  ungroup() %>% group_by(patient_id, entry) %>%  # define exit time
+  mutate(exitIndic = row_number(patient_id)==1 & entry==0 & event_time > entryTime) %>% 
+  ungroup() %>% 
+  filter(entryIndic == T | exitIndic == T) %>% 
+  select(patient_id, 
+         entryIndic, 
+         exitIndic, 
+         event_time, 
+         department_id) %>% 
+  group_by(patient_id) %>% 
+  filter(n()==2) %>%  # keep only patients with exit AND entry
+  filter( first(department_id) == last(department_id) ) %>%  # keep pats that enter/exit same dept
+  select(-exitIndic) %>% 
+  spread(entryIndic, event_time ) %>% 
+  ungroup()
+
+print(paste0("Number of unique ICU first visits: ", dim(adt_icu_uniq)[1]))
+```
+
+# Merge in medicine data 
+## Tables: SHC_med_de, dictionary_medications_SHC_EPIC
+
+```{r}
+
+first_visit_df_filt <- read.csv(
+  "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/first_visit_df_filt.csv"
+)
+
+# Merge on by patient ID
+medications_df <- con %>% 
+  tbl("SHC_med_de") %>% 
+  select(patient_id, 
+          medication_id, 
+          order_time) %>% 
+  collect() %>% 
+  inner_join(first_visit_df_filt, by = c("patient_id" = "patient_id")) %>% 
+  mutate(order_time = as.POSIXct(order_time)) %>% # Fix the time variables
+  mutate(order_time = floor_date(order_time, unit="days")) %>% 
+  # mark which medications were inpatient
+  mutate(inpat_med = (hosp_admsn_time <= order_time & hosp_disch_time >= order_time))
+  
+write.csv(medications_df, 
+          file = "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv")
+
+# what proportion of medications found were assigned in first inpatient visit
+sum(medications_df$inpat_med)/nrow(medications_df) 
+
+medications_df <- read_csv(
+  "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv"
+) #80 seconds
+
+uniqueMeds <- read.csv(
+  "/Users/Tarun/Documents/BIO_RESEARCH/exploratory_analysis/uniqueMeds.csv"
+)
+
+uniqueBsas <- uniqueMeds %>% 
+  select(-X) %>% 
+  rename(name = x)
+
+# Merge on the medications dictionary
+## medication_id links SHC_med_de to dictionary_medications_SHC_EPIC
+med_dict_df <- con %>%
+  tbl("dictionary_medications_SHC_EPIC") %>%
+  select(rxcui_str, medication_id) %>% 
+  mutate( bsa = rxcui_str %in% uniqueBsas$name==T ) %>% 
+  filter(bsa==1) %>% 
+  select(-rxcui_str) %>% 
+  group_by(medication_id) %>% 
+  collect() %>% filter(row_number(medication_id) == 1) # keep unique medication_id
+ # 3,107 medication_id values that are BSA
+
+
+# merge medications dictionary onto medications-visit data
+med_and_dict_df <- medications_df %>% 
+  left_join(med_dict_df, by = "medication_id") %>% 
+  replace_na(list(bsa = 0)) %>% rename(bsa = treatment) %>% 
+  select(-X1)
+
+```
+
+# Merge in cohort 
+## Tables: dx_master
+
+```{r}
+
+```
+
