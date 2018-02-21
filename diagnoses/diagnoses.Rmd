@@ -94,12 +94,18 @@ celiac_dx_id <- unique(celiac_df$dx_id)
 # Find diagnoses codes for T1DM 
 
 ```{r}
+# test <- dx_dict_df %>%
+#   filter( str_detect(dx_name, "type 1 diabetes mellitus") ) %>%
+#   arrange(current_icd9_list)
+# View(test)
 
-test <- dx_dict_df %>%
-  filter( str_detect(dx_name, "[Cc]eliac") &
-          str_detect(dx_name, "[dD]isease") ) %>%
-  arrange(current_icd9_list)
-View(test)
+
+t1dm_icd9 <- c("250.01", "250.03")
+
+t1dm_df <- dx_dict_df %>% 
+  filter(current_icd9_list %in% t1dm_icd9)
+
+t1dm_dx_id <- unique(t1dm_df$dx_id)
 
 ```
 
