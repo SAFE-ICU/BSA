@@ -28,9 +28,9 @@ con <- dbConnect(MySQL(),
 ```
 
 
-# Pull all data
+# Pull all visit data
 
-```{r}
+```{r pull visit data}
 
 ## Pull first inpatient visit of every patient
 ### SHC_visit_de
@@ -108,7 +108,7 @@ print(paste0("Row # first_visit_df_filt unique: ", dim(first_visit_df_filt)[1] )
 # Grab ICU data
 ## Table: SHC_ADT_de 
 
-```{r}
+```{r icu}
 ICU_SHC_No_PACU <- c("2000251","2000254","2000255","2000262","9992000")
 
 adt_icu_df <- con %>% 
@@ -160,11 +160,14 @@ print(paste0("Number of unique ICU first visits: ", dim(adt_icu_uniq)[1]))
 # Merge in medicine data 
 ## Tables: SHC_med_de, dictionary_medications_SHC_EPIC
 
-```{r}
+```{r medicine}
 
-first_visit_df_filt <- read.csv(
+first_visit_df_filt <- read_csv(
   "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/first_visit_df_filt.csv"
 )
+first_visit_df_filt <- first_visit_df_filt %>% 
+  select(-X1)
+
 
 # Merge on by patient ID
 medications_df <- con %>% 
@@ -213,15 +216,68 @@ med_dict_df <- con %>%
 # merge medications dictionary onto medications-visit data
 med_and_dict_df <- medications_df %>% 
   left_join(med_dict_df, by = "medication_id") %>% 
-  replace_na(list(bsa = 0)) %>% rename(bsa = treatment) %>% 
-  select(-X1)
+  replace_na(list(bsa = 0)) %>% 
+  mutate(treatment = (bsa == 1 & inpat_med==T) ) %>% 
+  select(-X1) %>% 
+  arrange(patient_id) %>% select(-order_time, -medication_id, -inpat_med, -bsa )
+
+treatment_df <- med_and_dict_df %>% 
+  group_by(patient_id) %>% summarise_all(max) %>% 
+  ungroup()
+
+
+write_csv(group_by, 
+          path = "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/treatment_df.csv"
+          )
 
 ```
 
 # Merge in cohort 
 ## Tables: dx_master
 
-```{r}
+```{r diagnoses}
 
+# Filter for 3 auto-immune conditions
+# Autoimmune Hypothyroidism
+# Celiac
+# T1DM
+
+dx_df <- con %>%
+  tbl("dx_master") %>% 
+  filter(dx_hospital=="SHC" & year(contact_date_time) >= 2009) %>% 
+  select(patient_id, contact_date_time, code, code_source) %>% 
+  collect()
+
+write_csv(dx_df, 
+          "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/dx_df.csv"  
+          )
+
+# Mark all diagnoses that are correspond to outcomes
+
+dx_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/dx_df.csv")
+
+dx_icd9 <- dx_df %>% 
+  filter( code_source=="ICD9CM" ) %>% 
+  mutate( dx_autoth = ( code == auto_hypo_icd9  ) ) %>% 
+  mutate( dx_celiac = ( code == celiac_icd9 ) ) %>% 
+  mutate( dx_t1dm   = ( code %in% t1dm_icd9 ) )
+
+dx_dxid <- dx_df %>% 
+  filter( code_source=="DX_ID" ) %>% 
+  mutate( dx_autoth = ( code %in% auto_hypo_dx_id  ) ) %>% 
+  mutate( dx_celiac = ( code %in% celiac_dx_id ) ) %>% 
+  mutate( dx_t1dm   = ( code %in% t1dm_dx_id ) )
+
+dx_outcome_df <- dx_icd9 %>%  
+  bind_rows(dx_dxid) %>% 
+  filter( dx_autoth | dx_celiac | dx_t1dm )
+
+
+# Merge onto the treatment_df table
+treatment_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/treatment_df.csv")
+
+
+
+# Find only diagnoses that happen 2 weeks after exposure but before 2 years after exposure
 ```
 
