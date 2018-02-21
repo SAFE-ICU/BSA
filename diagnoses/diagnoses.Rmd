@@ -1,0 +1,105 @@
+---
+title: "diagnoses"
+author: "Tarun"
+date: "2/5/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dbplyr)
+library(RMySQL)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(readr)
+
+# con <- dbConnect(MySQL(),  
+#                  user="tnarasim",
+#                  password=rstudioapi::askForPassword("Database password"), 
+#                  host="shahlab-db1.stanford.edu", 
+#                  port=3306,
+#                  db = "stride7"
+# )
+
+con2 <- dbConnect(MySQL(),  
+                 user="tnarasim",
+                 password=rstudioapi::askForPassword("Database password"), 
+                 host="shahlab-db1.stanford.edu", 
+                 port=3306,
+                 db = "stride7_dictionaries"
+)
+
+dx_dict_df <- con2 %>%
+  tbl("shc_clarity_edg") %>% 
+  select( dx_id, dx_name, contains("icd") ) %>% 
+  collect()
+
+dbDisconnect(con2)
+```
+
+
+# Find diagnoses codes for autoimmune hypothroidism
+```{r}
+# filter( dx_dict_df, current_icd10_list=="E06.3"  )
+
+# test <- dx_dict_df %>% 
+#   filter( (grepl("[aA]utoimmune" , dx_name ) & 
+#           grepl("[hH]ypo.?[tT]hyroid" , dx_name )) | 
+#           grepl( "[hH]ashimoto" , dx_name )
+#        ) %>% 
+#   arrange(current_icd9_list)
+# View(test)
+
+auto_hypo_icd9 <- "245.2"
+
+auto_hypo_df <- dx_dict_df %>% 
+  filter(current_icd9_list=="245.2" | dx_id== "193146" | dx_id=="1080318" | dx_id=="1794594")
+
+auto_hypo_dx_id <- unique(auto_hypo_df$dx_id)
+
+```
+
+- ICD9: 245.2 (?)
+  - Might include other diseases
+- ICD10: E06.3
+- find all dx_id with "autoimmune" and correct ICD9
+
+- Hashimoto's disease (aka chronic lymphocytic thyroiditis)
+
+# Find diagnoses codes for celiac 
+
+```{r}
+
+# test <- dx_dict_df %>%
+#   filter( str_detect(dx_name, "[Cc]eliac") & 
+#           str_detect(dx_name, "[dD]isease") ) %>% 
+#   arrange(current_icd9_list)
+# View(test)
+
+
+celiac_icd9 <- "579.0"
+
+celiac_df <- dx_dict_df %>% 
+  filter(current_icd9_list=="579.0" | dx_id== "1294744")
+
+celiac_dx_id <- unique(celiac_df$dx_id)
+
+```
+
+
+# Find diagnoses codes for T1DM 
+
+```{r}
+
+test <- dx_dict_df %>%
+  filter( str_detect(dx_name, "[Cc]eliac") &
+          str_detect(dx_name, "[dD]isease") ) %>%
+  arrange(current_icd9_list)
+View(test)
+
+```
+
