@@ -1,0 +1,54 @@
+---
+title: "time_event_analysis"
+author: "Tarun"
+date: "2/22/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list=ls())
+
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(readr)
+library(survival)
+library(survminer)
+library(ggplot2)
+```
+
+```{r}
+
+cohort_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/cohort_df.csv")
+
+surv_df <- cohort_df %>% 
+  mutate(survival = contact_date_time - hosp_disch_time)
+
+surv_autoth <- cohort_df %>% 
+  filter(dx_autoth | dx_none) %>% 
+  select(patient_id, hosp_disch_time, contact_date_time, 
+         dx_autoth, dx_none) %>% 
+  mutate( )
+
+surv_autoth$SurvObj <- with(surv_autoth, 
+                          Surv(time = contact_date_time, 
+                               event = dx_autoth))
+
+
+
+patients_survival$SurvObj <- with(patients_survival, 
+                                  Surv(time=survival_time, event=not_censored))
+
+# km.as.one <- survfit(SurvObj ~ 1, data = patients_survival, conf.type = "log-log")
+km.by.oxy <- survfit(SurvObj ~ oxy_drop, data = patients_survival)
+
+
+ggsurvplot(km.by.oxy, data=patients_survival) + xlab("Days")
+
+
+```
+
