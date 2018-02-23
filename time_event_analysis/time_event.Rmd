@@ -25,30 +25,78 @@ library(ggplot2)
 
 cohort_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/cohort_df.csv")
 
+# create survival time in days
 surv_df <- cohort_df %>% 
-  mutate(survival = contact_date_time - hosp_disch_time)
+  mutate(survival_time = 
+           int_length( interval( hosp_disch_time, contact_date_time  ) )/(24*60*60)   
+         )
 
-surv_autoth <- cohort_df %>% 
-  filter(dx_autoth | dx_none) %>% 
-  select(patient_id, hosp_disch_time, contact_date_time, 
-         dx_autoth, dx_none) %>% 
-  mutate( )
-
-surv_autoth$SurvObj <- with(surv_autoth, 
-                          Surv(time = contact_date_time, 
-                               event = dx_autoth))
-
-
-
-patients_survival$SurvObj <- with(patients_survival, 
-                                  Surv(time=survival_time, event=not_censored))
-
-# km.as.one <- survfit(SurvObj ~ 1, data = patients_survival, conf.type = "log-log")
-km.by.oxy <- survfit(SurvObj ~ oxy_drop, data = patients_survival)
-
-
-ggsurvplot(km.by.oxy, data=patients_survival) + xlab("Days")
-
-
+# View(
+#   select( 
+#     filter(surv_df, !is.na(contact_date_time), dx_autoth ) , 
+#     survival_time, contact_date_time, hosp_disch_time 
+#     ) 
+#   )
 ```
 
+# autoimmune hypothyroidism
+```{r}
+surv_autoth <- surv_df %>% 
+  filter(dx_autoth | dx_none)
+
+surv_autoth$SurvObj <- with(surv_autoth, 
+                          Surv(time = survival_time, 
+                               event = dx_autoth))
+
+# km.as.one <- survfit(SurvObj ~ 1, data=surv_autoth, conf.type = "log-log")
+# ggsurvplot(km.as.one, data=surv_autoth) + xlab("Days") + ylab("Event-to-time")
+
+km.by.treat.ah <- survfit(SurvObj ~ treatment, data=surv_autoth)
+ggsurvplot(km.by.treat.ah, data=surv_autoth) + 
+  xlab("Days") + ylab("Event-to-time") + 
+  ggtitle("Auto-immune hypothryroidism")
+
+# positive coeff -> higher risk
+summary( coxph( SurvObj ~ treatment,  data=surv_autoth ) )
+```
+
+# celiac 
+
+```{r}
+surv_celiac <- surv_df %>% 
+  filter(dx_celiac | dx_none)
+
+surv_celiac$SurvObj <- with(surv_celiac, 
+                          Surv(time = survival_time, 
+                               event = dx_celiac))
+
+km.by.treat.celiac <- survfit(SurvObj ~ treatment, data=surv_celiac)
+ggsurvplot(km.by.treat.celiac, data=surv_celiac) + 
+  xlab("Days") + ylab("Event-to-time") + 
+  ggtitle("Celiac")
+
+
+summary( coxph( SurvObj ~ treatment, data=surv_celiac ) 
+)
+```
+
+
+# t1dm 
+
+```{r}
+surv_t1dm <- surv_df %>% 
+  filter(dx_t1dm | dx_none)
+
+surv_t1dm$SurvObj <- with(surv_t1dm, 
+                          Surv(time = survival_time, 
+                               event = dx_t1dm))
+
+km.by.treat.t1dm <- survfit(SurvObj ~ treatment, data=surv_t1dm)
+ggsurvplot(km.by.treat.t1dm, data=surv_t1dm) + 
+  xlab("Days") + ylab("Event-to-time") + 
+  ggtitle("T1DM")
+
+
+summary( coxph( SurvObj ~ treatment, data=surv_t1dm ) 
+)
+```
