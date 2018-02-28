@@ -6,10 +6,13 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.path = "images/"
+  )
 ```
 
-```{r}
+```{r library, message=FALSE, warning=FALSE}
 rm(list=ls())
 
 library(dplyr)
@@ -28,7 +31,7 @@ cohort_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/cohort_df.c
 # create survival time in days
 surv_df <- cohort_df %>% 
   mutate(survival_time = 
-           int_length( interval( hosp_disch_time, contact_date_time  ) )/(24*60*60)   
+           int_length( interval( order_time, contact_date_time  ) )/(24*60*60)   
          )
 
 # View(
