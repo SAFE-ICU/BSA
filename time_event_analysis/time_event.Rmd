@@ -34,12 +34,17 @@ surv_df <- cohort_df %>%
            int_length( interval( order_time, contact_date_time  ) )/(24*60*60)   
          )
 
-# View(
-#   select( 
-#     filter(surv_df, !is.na(contact_date_time), dx_autoth ) , 
-#     survival_time, contact_date_time, hosp_disch_time 
-#     ) 
-#   )
+str(surv_df)
+summary(surv_df$survival_time)
+
+
+head( 
+  filter( select(surv_df, patient_id, order_time, contact_date_time, survival_time ) , 
+          !is.na(contact_date_time)
+    ), 
+  n = 50 
+  )
+
 ```
 
 # autoimmune hypothyroidism
@@ -87,8 +92,11 @@ summary( coxph( SurvObj ~ treatment, data=surv_celiac )
 # t1dm 
 
 ```{r}
+
 surv_t1dm <- surv_df %>% 
-  filter(dx_t1dm | dx_none)
+  filter(dx_t1dm | dx_none) %>% 
+  select(-dx_celiac, -dx_autoth) %>% 
+  arrange(survival_time)
 
 surv_t1dm$SurvObj <- with(surv_t1dm, 
                           Surv(time = survival_time, 
@@ -99,7 +107,6 @@ ggsurvplot(km.by.treat.t1dm, data=surv_t1dm) +
   xlab("Days") + ylab("Event-to-time") + 
   ggtitle("T1DM")
 
-
-summary( coxph( SurvObj ~ treatment, data=surv_t1dm ) 
-)
+summary( coxph( SurvObj ~ treatment, data=surv_t1dm ) ) 
+         
 ```

@@ -316,18 +316,48 @@ treatment_df <- treatment_df %>%
   select(patient_id, order_time, treatment)
 
 # Keep only diagnoses that happen after index date of BSA
+# cohort_diag_df <- treatment_df %>% 
+#   left_join(dx_outcome_df, by="patient_id") %>% 
+#   replace_na( list(dx_autoth=F, dx_celiac=F, dx_t1dm = F) ) %>% 
+#   mutate( early_diag =
+#             !is.na(contact_date_time) & 
+#             floor_date(contact_date_time, unit = "days") <= order_time + 4*dweeks(x=1) ) %>%
+#   replace_na( list(early_diag=F) ) %>% 
+#   mutate( contact_date_time = 
+#             ifelse( early_diag==T , NA, as.numeric(contact_date_time)  )  ) %>% 
+#   mutate(contact_date_time = as_date(contact_date_time)) %>% 
+#   mutate( dx_autoth = ifelse(early_diag & dx_autoth, F, dx_autoth  )   ) %>% 
+#   mutate( dx_celiac = ifelse(early_diag & dx_celiac, F, dx_celiac  )   ) %>% 
+#   mutate( dx_t1dm   = ifelse(early_diag & dx_t1dm, F, dx_t1dm  )   ) %>% 
+#   select(-early_diag) 
+
+
 cohort_diag_df <- treatment_df %>% 
   left_join(dx_outcome_df, by="patient_id") %>% 
   replace_na( list(dx_autoth=F, dx_celiac=F, dx_t1dm = F) ) %>% 
   mutate( early_diag =
             !is.na(contact_date_time) & 
             floor_date(contact_date_time, unit = "days") <= order_time + 4*dweeks(x=1) ) %>%
-  replace_na( list(early_diag=F) ) %>% 
-  mutate( dx_autoth = ifelse(early_diag & dx_autoth, F, dx_autoth  )   ) %>% 
-  mutate( dx_celiac = ifelse(early_diag & dx_celiac, F, dx_celiac  )   ) %>% 
-  mutate( dx_t1dm   = ifelse(early_diag & dx_t1dm, F, dx_t1dm  )   ) %>% 
-  select(-early_diag)
+  replace_na( list(early_diag=F) ) 
 
+foo <- cohort_diag_df %>% 
+  filter(early_diag==T) %>% 
+  mutate( contact_date_time = as.POSIXct(NA) )
+
+bar <- cohort_diag_df %>% 
+  filter(early_diag==F)
+
+cohort_diag_df <- foo %>% 
+  bind_rows(bar) %>% 
+  mutate( dx_autoth = ifelse(early_diag & dx_autoth, F, dx_autoth  )   ) %>%
+  mutate( dx_celiac = ifelse(early_diag & dx_celiac, F, dx_celiac  )   ) %>%
+  mutate( dx_t1dm   = ifelse(early_diag & dx_t1dm, F, dx_t1dm  )   ) %>%
+  select(-early_diag)
+  
+str(cohort_diag_df)
+head(filter(cohort_diag_df, !is.na(contact_date_time)), n = 50 )
+
+# View(filter(cohort_diag_df, !is.na(contact_date_time) ))
 # print(paste0("Early diags: ", sum(cohort_diag_df$dx_autoth) - sum(foo$dx_autoth) ,
 #              " Out of: ", sum(cohort_diag_df$dx_autoth) ))
 # print(paste0("Early diags: ", sum(cohort_diag_df$dx_celiac) - sum(foo$dx_celiac) ,
