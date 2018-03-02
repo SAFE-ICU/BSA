@@ -38,12 +38,12 @@ str(surv_df)
 summary(surv_df$survival_time)
 
 
-head( 
-  filter( select(surv_df, patient_id, order_time, contact_date_time, survival_time ) , 
-          !is.na(contact_date_time)
-    ), 
-  n = 50 
-  )
+# head( 
+#   filter( select(surv_df, patient_id, order_time, contact_date_time, survival_time ) , 
+#           !is.na(contact_date_time)
+#     ), 
+#   n = 50 
+#   )
 
 ```
 
@@ -57,11 +57,11 @@ surv_autoth$SurvObj <- with(surv_autoth,
                                event = dx_autoth))
 
 # km.as.one <- survfit(SurvObj ~ 1, data=surv_autoth, conf.type = "log-log")
-# ggsurvplot(km.as.one, data=surv_autoth) + xlab("Days") + ylab("Event-to-time")
+# ggsurvplot(km.as.one, data=surv_autoth) + xlab("Days") + ylab("Time-to-diagnosis")
 
 km.by.treat.ah <- survfit(SurvObj ~ treatment, data=surv_autoth)
 ggsurvplot(km.by.treat.ah, data=surv_autoth) + 
-  xlab("Days") + ylab("Event-to-time") + 
+  xlab("Days") + ylab("Time-to-diagnosis") + 
   ggtitle("Auto-immune hypothryroidism")
 
 # positive coeff -> higher risk
@@ -80,7 +80,7 @@ surv_celiac$SurvObj <- with(surv_celiac,
 
 km.by.treat.celiac <- survfit(SurvObj ~ treatment, data=surv_celiac)
 ggsurvplot(km.by.treat.celiac, data=surv_celiac) + 
-  xlab("Days") + ylab("Event-to-time") + 
+  xlab("Days") + ylab("Time-to-diagnosis") + 
   ggtitle("Celiac")
 
 
@@ -104,9 +104,106 @@ surv_t1dm$SurvObj <- with(surv_t1dm,
 
 km.by.treat.t1dm <- survfit(SurvObj ~ treatment, data=surv_t1dm)
 ggsurvplot(km.by.treat.t1dm, data=surv_t1dm) + 
-  xlab("Days") + ylab("Event-to-time") + 
+  xlab("Days") + ylab("Time-to-diagnosis") + 
   ggtitle("T1DM")
 
 summary( coxph( SurvObj ~ treatment, data=surv_t1dm ) ) 
          
 ```
+
+# MS
+
+```{r}
+
+surv_ms <- surv_df %>% 
+  filter(dx_ms | dx_none)
+
+surv_ms$SurvObj <- with(surv_ms, 
+                          Surv(time = survival_time, 
+                               event = dx_ms))
+
+km.by.treat.ms <- survfit(SurvObj ~ treatment, data=surv_ms)
+ggsurvplot(km.by.treat.ms, data=surv_ms) + 
+  xlab("Days") + ylab("Time-to-diagnosis") + 
+  ggtitle("MS")
+
+summary( coxph( SurvObj ~ treatment, data=surv_ms ) ) 
+         
+```
+
+
+# Rheumatoid arthritis
+
+```{r}
+
+surv_rheuar <- surv_df %>% 
+  filter(dx_rheuar | dx_none) 
+
+surv_rheuar$SurvObj <- with(surv_rheuar, 
+                          Surv(time = survival_time, 
+                               event = dx_rheuar))
+
+km.by.treat.rheuar <- survfit(SurvObj ~ treatment, data=surv_rheuar)
+ggsurvplot(km.by.treat.rheuar, data=surv_rheuar) + 
+  xlab("Days") + ylab("Time-to-diagnosis") + 
+  ggtitle("Rheumatoid Arthritis")
+
+summary( coxph( SurvObj ~ treatment, data=surv_rheuar ) ) 
+         
+```
+
+
+
+# Graves' Disease
+
+```{r}
+
+# surv_graves <- surv_df %>%
+#   filter(dx_graves | dx_none)
+# 
+# surv_graves$SurvObj <- with(surv_graves, 
+#                           Surv(time = survival_time, 
+#                                event = dx_graves))
+# 
+# km.by.treat.graves <- survfit(SurvObj ~ treatment, data=surv_graves)
+# ggsurvplot(km.by.treat.graves, data=surv_graves) + 
+#   xlab("Days") + ylab("Time-to-diagnosis") + 
+#   ggtitle("Graves")
+# 
+# summary( coxph( SurvObj ~ treatment, data=surv_graves ) ) 
+         
+```
+
+
+
+# SLE
+
+```{r}
+
+surv_sle <- surv_df %>% 
+  filter(dx_sle | dx_none)
+
+surv_sle$SurvObj <- with(surv_sle, 
+                          Surv(time = survival_time, 
+                               event = dx_sle))
+
+km.by.treat.sle <- survfit(SurvObj ~ treatment, data=surv_sle)
+ggsurvplot(km.by.treat.sle, data=surv_sle) + 
+  xlab("Days") + ylab("Time-to-diagnosis") + 
+  ggtitle("SLE")
+
+summary( coxph( SurvObj ~ treatment, data=surv_sle ) ) 
+         
+```
+
+
+
+
+
+
+
+
+
+
+
+

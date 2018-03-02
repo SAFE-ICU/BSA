@@ -16,6 +16,7 @@ library(dplyr)
 library(tidyr)
 library(lubridate)
 library(readr)
+library(stringr)
 
 # con <- dbConnect(MySQL(),  
 #                  user="tnarasim",
@@ -42,7 +43,7 @@ dbDisconnect(con2)
 ```
 
 
-# Find diagnoses codes for autoimmune hypothroidism
+# Find dx codes for autoimmune hypothroidism
 ```{r}
 # filter( dx_dict_df, current_icd10_list=="E06.3"  )
 
@@ -70,7 +71,7 @@ auto_hypo_dx_id <- unique(auto_hypo_df$dx_id)
 
 - Hashimoto's disease (aka chronic lymphocytic thyroiditis)
 
-# Find diagnoses codes for celiac 
+# Find dx codes for celiac 
 
 ```{r}
 
@@ -91,9 +92,9 @@ celiac_dx_id <- unique(celiac_df$dx_id)
 ```
 
 
-# Find diagnoses codes for T1DM 
+# Find dx codes for T1DM 
 
-```{r}
+```{r t1dm}
 # test <- dx_dict_df %>%
 #   filter( str_detect(dx_name, "type 1 diabetes mellitus") ) %>%
 #   arrange(current_icd9_list)
@@ -107,5 +108,93 @@ t1dm_df <- dx_dict_df %>%
 
 t1dm_dx_id <- unique(t1dm_df$dx_id)
 
+```
+
+
+# Find dx codes for multiple sclerosis 
+
+```{r ms}
+
+# test <- dx_dict_df %>%
+#   filter( str_detect(dx_name, "multiple sclerosis") ) %>%
+#   arrange(current_icd9_list)
+# View(test)
+# 
+# test <- dx_dict_df %>%
+#   filter( current_icd9_list=="340") %>%
+#   arrange(dx_id)
+# View(test)
+
+ms_icd9 <- c("340")
+
+ms_df <- dx_dict_df %>% 
+  filter(current_icd9_list %in% ms_icd9)
+
+ms_dx_id <- unique(ms_df$dx_id)
+
+
+```
+
+
+# Find dx codes for rheumatoid arthritis
+
+```{r rheumatoid arthritis}
+
+rheu_ar_icd9 <- c("714.0")
+
+rheu_ar_df <- dx_dict_df %>% 
+  filter(current_icd9_list %in% rheu_ar_icd9)
+
+rheu_ar_dx_id <- unique(rheu_ar_df$dx_id)
+
+
+```
+
+
+# Find dx codes for Graves disease
+
+```{r graves}
+
+grav_icd9 <- c("242.0")
+
+grav_df <- dx_dict_df %>% 
+  filter(current_icd9_list %in% grav_icd9)
+
+grav_dx_id <- unique(grav_df$dx_id)
+
+
+```
+
+
+# Find dx codes for SLE
+
+```{r sle}
+
+sle_icd9 <- c("710.0")
+
+sle_df <- dx_dict_df %>% 
+  filter(current_icd9_list %in% sle_icd9)
+
+sle_dx_id <- unique(sle_df$dx_id)
+
+```
+
+
+
+# Save all variables
+
+```{r}
+
+save( auto_hypo_dx_id, auto_hypo_icd9, 
+      celiac_dx_id, celiac_icd9, 
+      t1dm_dx_id, t1dm_icd9,
+      ms_icd9, ms_dx_id, 
+      rheu_ar_icd9, rheu_ar_dx_id, 
+      grav_icd9, grav_dx_id, 
+      sle_icd9, sle_dx_id, 
+      file="/Users/Tarun/Documents/BIO_RESEARCH/diagnoses/diagnosis_codes"
+      )
+
+load( "/Users/Tarun/Documents/BIO_RESEARCH/diagnoses/diagnosis_codes" )
 ```
 

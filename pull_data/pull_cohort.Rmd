@@ -293,21 +293,28 @@ dx_icd9 <- dx_df %>%
   filter( code_source=="ICD9CM" ) %>% 
   mutate( dx_autoth = ( code == auto_hypo_icd9  ) ) %>% 
   mutate( dx_celiac = ( code == celiac_icd9 ) ) %>% 
-  mutate( dx_t1dm   = ( code %in% t1dm_icd9 ) )
+  mutate( dx_t1dm   = ( code %in% t1dm_icd9 ) ) %>% 
+  mutate( dx_ms = (code == ms_icd9) ) %>% 
+  mutate( dx_rheuar = (code == rheu_ar_icd9) ) %>% 
+  mutate( dx_graves = (code == grav_icd9) ) %>% 
+  mutate( dx_sle = (code == sle_icd9) )
 
 dx_dxid <- dx_df %>% 
   filter( code_source=="DX_ID" ) %>% 
   mutate( dx_autoth = ( code %in% auto_hypo_dx_id  ) ) %>% 
   mutate( dx_celiac = ( code %in% celiac_dx_id ) ) %>% 
-  mutate( dx_t1dm   = ( code %in% t1dm_dx_id ) )
+  mutate( dx_t1dm   = ( code %in% t1dm_dx_id ) ) %>% 
+  mutate( dx_ms = (code %in% ms_dx_id) ) %>% 
+  mutate( dx_rheuar = (code %in% rheu_ar_dx_id) ) %>% 
+  mutate( dx_graves = (code %in% grav_dx_id) ) %>% 
+  mutate( dx_sle = (code %in% sle_dx_id) ) 
 
 dx_outcome_df <- dx_icd9 %>%  
   bind_rows(dx_dxid) %>% 
-  filter( dx_autoth | dx_celiac | dx_t1dm ) %>% # keep only patients with at least one outcome
+  # keep only patients with at least one outcome
+  filter( dx_autoth | dx_celiac | dx_t1dm | dx_ms | dx_rheuar | dx_graves | dx_sle ) %>% 
   arrange(patient_id, contact_date_time) %>% 
   select(patient_id, contact_date_time, starts_with("dx"))
-
-
 
 # Merge the diagnosis/outcome data onto the treatment_df table
 treatment_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/treatment_df.csv")
@@ -315,7 +322,7 @@ treatment_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/treatmen
 treatment_df <- treatment_df %>% 
   select(patient_id, order_time, treatment)
 
-# Keep only diagnoses that happen after index date of BSA
+
 # cohort_diag_df <- treatment_df %>% 
 #   left_join(dx_outcome_df, by="patient_id") %>% 
 #   replace_na( list(dx_autoth=F, dx_celiac=F, dx_t1dm = F) ) %>% 
@@ -331,15 +338,17 @@ treatment_df <- treatment_df %>%
 #   mutate( dx_t1dm   = ifelse(early_diag & dx_t1dm, F, dx_t1dm  )   ) %>% 
 #   select(-early_diag) 
 
-
+# Keep only diagnoses that happen a month after index date of BSA
 cohort_diag_df <- treatment_df %>% 
   left_join(dx_outcome_df, by="patient_id") %>% 
-  replace_na( list(dx_autoth=F, dx_celiac=F, dx_t1dm = F) ) %>% 
+  replace_na( list(dx_autoth=F, dx_celiac=F, dx_t1dm = F, 
+                   dx_ms=F, dx_rheuar=F, dx_graves=F, dx_sle=F) ) %>% 
   mutate( early_diag =
             !is.na(contact_date_time) & 
             floor_date(contact_date_time, unit = "days") <= order_time + 4*dweeks(x=1) ) %>%
   replace_na( list(early_diag=F) ) 
 
+# make contact_date_time NA if early diagnosis
 foo <- cohort_diag_df %>% 
   filter(early_diag==T) %>% 
   mutate( contact_date_time = as.POSIXct(NA) )
@@ -352,10 +361,14 @@ cohort_diag_df <- foo %>%
   mutate( dx_autoth = ifelse(early_diag & dx_autoth, F, dx_autoth  )   ) %>%
   mutate( dx_celiac = ifelse(early_diag & dx_celiac, F, dx_celiac  )   ) %>%
   mutate( dx_t1dm   = ifelse(early_diag & dx_t1dm, F, dx_t1dm  )   ) %>%
+  mutate( dx_ms     = ifelse(early_diag & dx_ms, F, dx_ms  )   ) %>%
+  mutate( dx_rheuar = ifelse(early_diag & dx_rheuar, F, dx_rheuar  )   ) %>%
+  mutate( dx_graves = ifelse(early_diag & dx_graves, F, dx_graves  )   ) %>%
+  mutate( dx_sle    = ifelse(early_diag & dx_sle, F, dx_sle  )   ) %>%
   select(-early_diag)
   
 str(cohort_diag_df)
-head(filter(cohort_diag_df, !is.na(contact_date_time)), n = 50 )
+# head(filter(cohort_diag_df, !is.na(contact_date_time)), n = 50 )
 
 # View(filter(cohort_diag_df, !is.na(contact_date_time) ))
 # print(paste0("Early diags: ", sum(cohort_diag_df$dx_autoth) - sum(foo$dx_autoth) ,
@@ -367,7 +380,8 @@ head(filter(cohort_diag_df, !is.na(contact_date_time)), n = 50 )
 
 # Split by outcome
 cohort_none_df <- cohort_diag_df %>% 
-  mutate( sum_dx = dx_autoth + dx_celiac + dx_t1dm ) %>% 
+  mutate( sum_dx = dx_autoth + dx_celiac + dx_t1dm + 
+            dx_ms + dx_rheuar + dx_graves + dx_sle ) %>% 
   group_by(patient_id) %>% filter(max(sum_dx)==0) %>% 
   ungroup() %>% select(-sum_dx) %>% 
   mutate(dx_none = T)
@@ -387,10 +401,31 @@ cohort_t1dm_df <- cohort_diag_df %>%
   filter(dx_t1dm) %>% group_by(patient_id) %>% 
   filter(contact_date_time == min(contact_date_time)) %>% ungroup() %>% 
   filter(!duplicated(.))
+
+cohort_ms_df <- cohort_diag_df %>% 
+  filter(dx_ms) %>% group_by(patient_id) %>% 
+  filter(contact_date_time == min(contact_date_time)) %>% ungroup() %>% 
+  filter(!duplicated(.))
+
+cohort_rheuar_df <- cohort_diag_df %>% 
+  filter(dx_rheuar) %>% group_by(patient_id) %>% 
+  filter(contact_date_time == min(contact_date_time)) %>% ungroup() %>% 
+  filter(!duplicated(.))
+
+cohort_graves_df <- cohort_diag_df %>% 
+  filter(dx_graves) %>% group_by(patient_id) %>% 
+  filter(contact_date_time == min(contact_date_time)) %>% ungroup() %>% 
+  filter(!duplicated(.))
+
+cohort_sle_df <- cohort_diag_df %>% 
+  filter(dx_sle) %>% group_by(patient_id) %>% 
+  filter(contact_date_time == min(contact_date_time)) %>% ungroup() %>% 
+  filter(!duplicated(.))
     
 # Combine back together
 cohort_df <- cohort_none_df %>% 
-  bind_rows( cohort_autoth_df, cohort_celiac_df, cohort_t1dm_df ) %>% 
+  bind_rows( cohort_autoth_df, cohort_celiac_df, cohort_t1dm_df, 
+             cohort_ms_df, cohort_rheuar_df, cohort_graves_df, cohort_sle_df) %>% 
   replace_na(list(dx_none = F))
 
 write_csv( cohort_df, 
