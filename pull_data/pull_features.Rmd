@@ -1,0 +1,99 @@
+---
+title: "pull_features"
+author: "Tarun"
+date: "3/9/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(dbplyr)
+library(RMySQL)
+library(tidyverse)
+library(lubridate)
+
+con <- dbConnect(MySQL(),  
+                 user="tnarasim",
+                 password=rstudioapi::askForPassword("Database password"), 
+                 host="shahlab-db1.stanford.edu", 
+                 port=3306,
+                 db = "stride7"
+)
+
+```
+
+# Open cohort dataframe
+```{r}
+
+cohort_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/cohort_df.csv")
+
+```
+
+
+# Merge in demographics
+
+```{r}
+
+demo_df <- con %>% 
+  tbl("demographics") %>% 
+  select(patient_id, race, gender, ethnicity, birth_date) %>% 
+  collect()
+dbDisconnect(con)
+
+features_df <- cohort_df %>% 
+  left_join(demo_df, by = "patient_id")
+
+write_csv(features_df, "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/features_df.csv")
+
+```
+
+
+# Merge in medications data
+
+```{r}
+
+hist_df <- con %>% 
+  tbl("SHC_med_de") %>% 
+  select(end_time, discon_time) %>% 
+  collect()
+
+
+hist_df_plot <- hist_df %>% 
+  sample_frac(0.1) 
+
+foo <- hist_df_plot %>% 
+  filter(end_time != "0000-00-00 00:00:00") %>% 
+  mutate( x = as.POSIXct( strptime(end_time,"%Y-%m-%d %H:%M:%S") ), 
+          y = as.POSIXct( strptime(discon_time,"%Y-%m-%d %H:%M:%S") ))
+  
+bar <- foo %>% 
+  mutate( difftime = int_length( interval( x, y ) )/(24*60*60) )
+
+q <- quantile(bar$difftime, probs = c(0.01,0.99), na.rm = T )
+bar2 <- filter( bar, difftime >= q[1] & difftime <= q[2]  )  
+ggplot(bar2, aes(difftime) ) + geom_histogram(bins=50) + 
+  ggtitle("discon_time - end_time") + xlab("Days")
+
+med_features_df <- con %>% 
+  tbl("SHC_med_de") %>% 
+  select(patient_id, 
+          medication_id, 
+          start_time, 
+          end_time) %>% 
+  collect()
+
+# make hist of discon_time - end_time 
+# filter for
+#  - ordering_mode_c 
+#  - med_route_c 
+#  - equip_status_yn 
+# merge on end_time, med_route_c, quantity, refills, 
+#   hv_dose_unit_c, hv_discrete_dose
+#   using patient_id, start_time, medication_id
+
+```
+
