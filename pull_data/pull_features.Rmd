@@ -36,7 +36,7 @@ cohort_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/cohort_df.c
 
 # Merge in demographics
 
-```{r}
+```{r demographics}
 
 demo_df <- con %>% 
   tbl("demographics") %>% 
@@ -52,18 +52,21 @@ write_csv(features_df, "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/features_d
 ```
 
 
-# Merge in medications data
+# Merge in medications features
 
 ```{r}
+## Analyses for Tavpritesh
 
 hist_df <- con %>% 
   tbl("SHC_med_de") %>% 
   select(end_time, discon_time) %>% 
-  collect()
-
+  collect() # 4 minutes
 
 hist_df_plot <- hist_df %>% 
   sample_frac(0.1) 
+
+n_discon <- nrow(filter(hist_df, discon_time!="0000-00-00 00:00:00"  ))/nrow(hist_df)
+n_end <-nrow(filter(hist_df, end_time!="0000-00-00 00:00:00"  ))/nrow(hist_df)
 
 foo <- hist_df_plot %>% 
   filter(end_time != "0000-00-00 00:00:00") %>% 
@@ -78,22 +81,35 @@ bar2 <- filter( bar, difftime >= q[1] & difftime <= q[2]  )
 ggplot(bar2, aes(difftime) ) + geom_histogram(bins=50) + 
   ggtitle("discon_time - end_time") + xlab("Days")
 
+
+```
+
+
+```{r medications}
+# Pull data
+
 med_features_df <- con %>% 
   tbl("SHC_med_de") %>% 
   select(patient_id, 
           medication_id, 
           start_time, 
-          end_time) %>% 
-  collect()
+          end_time, 
+          order_time, 
+          med_route_c, 
+          quantity,
+          refills, 
+          hv_dose_unit_c, 
+          hv_discrete_dose) %>% 
+  collect() %>% 
+  right_join(cohort_df, by=c("patient_id", "order_time", "medication_id"))
 
-# make hist of discon_time - end_time 
-# filter for
-#  - ordering_mode_c 
-#  - med_route_c 
-#  - equip_status_yn 
-# merge on end_time, med_route_c, quantity, refills, 
-#   hv_dose_unit_c, hv_discrete_dose
-#   using patient_id, start_time, medication_id
 
+# merge on drug features
+#   using patient_id, order_time, medication_id
+
+
+
+# calculate duration as interval(order_time, end_time)
+#  take care of instances where end_time < order_time 
 ```
 
