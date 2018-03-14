@@ -9,23 +9,62 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
 library(dbplyr)
 library(RMySQL)
-library(dplyr)
-library(tidyr)
 library(lubridate)
-library(readr)
 
 con <- dbConnect(MySQL(),  
                  user="tnarasim",
                  password=rstudioapi::askForPassword("Database password"), 
                  host="shahlab-db1.stanford.edu", 
                  port=3306,
-                 db = "stride7"
-)
+                 db = "stride7" )
+
+pathStr <- "/Users/Tarun/Documents/BIO_RESEARCH/"
 
 ```
+
+```{r functions}
+
+write_icu_visit <- function( df ) {
+  write_csv(df, 
+            "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/icu_visit.csv" 
+            )  
+}
+
+write_medications_df  <- function(df) {
+  write_csv(df, 
+            "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv"   )
+}
+
+read_medications_df <- function() {
+  medications_df <- read_csv(
+  "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv"
+  )
+
+  medications_df <- medications_df %>% 
+    select(-X1)
+
+return(medications_df)
+}
+
+readBSAs <- function() {
+  uniqueMeds <- read.csv( paste0(pathStr, "exploratory_analysis/uniqueMeds.csv") )
+
+  uniqueBsas <- uniqueMeds %>% 
+    select(-X) %>% 
+    rename(name = x)
+  
+  return(uniqueBsas)
+}
+
+
+
+```
+
+
 
 
 # Pull all visit data
@@ -53,8 +92,6 @@ WHERE
         AND hosp_disch_time != '0000-00-00';"       
 )
 
-dim(visit_df)
-
 ## Pull ADT table
 ### SHC_ADT_de
 
@@ -62,12 +99,9 @@ adt_df <- dbGetQuery(con,
 "SELECT 
     `SHC_ADT_de`.`patient_id`, 
     `SHC_ADT_de`.`event_time`
-FROM
-    `stride7`.`SHC_ADT_de`
-WHERE
-        event_type_c=1 
-OR      
-        event_type_c=2; "   
+FROM `stride7`.`SHC_ADT_de`
+WHERE  event_type_c=1 
+OR     event_type_c=2; "   
 )
 
 # dbDisconnect(con)
@@ -109,8 +143,11 @@ print(paste0("Row # first_visit_df_filt unique: ", dim(first_visit_df_filt)[1] )
 ## Table: SHC_ADT_de 
 
 ```{r icu}
+
+# List of ICU dept ID's given by Tavpritesh
 ICU_SHC_No_PACU <- c("2000251","2000254","2000255","2000262","9992000")
 
+# Pull ICU data
 adt_icu_df <- con %>% 
   tbl("SHC_ADT_de") %>%
   filter(department_id %in% ICU_SHC_No_PACU) %>%
@@ -121,19 +158,19 @@ adt_icu_df <- con %>%
   filter(event_type_c==3 | event_type_c==4) %>% 
   arrange(patient_id, event_time) %>% 
   collect()
-  
 
-dim(adt_icu_df)
+
 print(paste0("Number of unique ICU patients: ", n_distinct(adt_icu_df$patient_id)))
-# View(filter(adt_icu_uniq, patient_id==425 | patient_id==1657))
 
-
+# Find entry/exit times for first ICU visit for every patient
 adt_icu_uniq <- adt_icu_df %>% 
   mutate(entry = event_type_c==3) %>% 
   group_by(patient_id, entry) %>% 
+  # mark first entry
   mutate( entryIndic = row_number(patient_id) == 1 & entry==1 ) %>% 
   ungroup() %>% group_by(patient_id) %>% 
-  mutate(entryTime = ifelse(entryIndic==1, event_time, NA) ) %>% # find first entry time
+  # find first entry time
+  mutate(entryTime = ifelse(entryIndic==1, event_time, NA) ) %>% 
   arrange(patient_id, entryTime) %>% 
   mutate(entryTime = first(entryTime)) %>% 
   filter( event_time > entryTime | entry==1 ) %>% 
@@ -141,6 +178,7 @@ adt_icu_uniq <- adt_icu_df %>%
   ungroup() %>% group_by(patient_id, entry) %>%  # define exit time
   mutate(exitIndic = row_number(patient_id)==1 & entry==0 & event_time > entryTime) %>% 
   ungroup() %>% 
+  # keep only entry/exit rows
   filter(entryIndic == T | exitIndic == T) %>% 
   select(patient_id, 
          entryIndic, 
@@ -149,12 +187,42 @@ adt_icu_uniq <- adt_icu_df %>%
          department_id) %>% 
   group_by(patient_id) %>% 
   filter(n()==2) %>%  # keep only patients with exit AND entry
-  filter( first(department_id) == last(department_id) ) %>%  # keep pats that enter/exit same dept
+  # keep only patients that enter/exit same dept
+  filter( first(department_id) == last(department_id) ) %>%  
   select(-exitIndic) %>% 
   spread(entryIndic, event_time ) %>% 
-  ungroup()
+  ungroup() %>% 
+  rename( entry_time = "TRUE", exit_time = "FALSE" ) %>% 
+  mutate( entry_time = as.POSIXct(entry_time), 
+          exit_time = as.POSIXct(exit_time))
 
 print(paste0("Number of unique ICU first visits: ", dim(adt_icu_uniq)[1]))
+
+write_icu_visit(df = adt_icu_uniq)
+
+```
+
+
+# Append inpatient and ICU data 
+
+```{r append inpat ICU}
+
+first_visit_df_filt <- read_csv(
+  "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/first_visit_df_filt.csv"
+) %>% 
+  select(-X1) %>% select(patient_id, hosp_admsn_time, hosp_disch_time) %>% 
+  mutate(icu = 0) %>% 
+  mutate(hosp_admsn_time = as.POSIXct(hosp_admsn_time), 
+         hosp_disch_time = as.POSIXct(hosp_disch_time))
+
+icu_visit <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/icu_visit.csv") %>% 
+  rename(hosp_admsn_time = entry_time, hosp_disch_time = exit_time) %>% 
+  select(-department_id) %>% 
+  mutate(icu = 1)
+
+visit_data <- first_visit_df_filt %>% 
+  bind_rows( icu_visit )
+  
 ```
 
 
@@ -170,14 +238,12 @@ con2 <- dbConnect(MySQL(),
                  password=rstudioapi::askForPassword("Database password"), 
                  host="shahlab-db1.stanford.edu", 
                  port=3306,
-                 db = "stride7_dictionaries"
-)
+                 db = "stride7_dictionaries")
 
 dict_route <- con2 %>% 
   tbl("shc_zc_admin_route") %>% select(-name) %>% 
   collect() %>% 
   filter(accom_reason_c %in% route_options)
-
 
 route_options_num <- as.vector( dict_route$med_route_c )  
 
@@ -188,20 +254,6 @@ route_options_num <- as.vector( dict_route$med_route_c )
 ```{r medicine}
 
 # Read in first visit data
-first_visit_df_filt <- read_csv(
-  "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/first_visit_df_filt.csv"
-)
-
-first_visit_df_filt <- first_visit_df_filt %>% 
-  select(-X1)
-
-medications_df <- con %>%
-  tbl("SHC_med_de") %>%
-  head(n = 100000) %>%
-  select(start_time, end_time, order_time) %>%
-  collect()
-
-nrow( filter( medications_df, start_time > end_time ) )
 
 # Merge medication data onto first visit data
 ## 17 minutes!!
@@ -210,49 +262,27 @@ medications_df <- con %>%
   filter( med_route_c %in% route_options_num & ordering_mode_c==2 ) %>% 
   select(patient_id, 
           medication_id, 
-          start_time) %>% 
+          order_time) %>% 
   collect() %>% 
-  right_join(first_visit_df_filt, by = c("patient_id" = "patient_id")) %>% 
+  right_join(visit_data, by = c("patient_id" = "patient_id")) %>% 
   # Fix the time variables
-  mutate(start_time = as.POSIXct(strptime(start_time,"%Y-%m-%d %H:%M:%S"))) %>% 
-  mutate(start_time = floor_date(start_time, unit="days")) %>% 
+  mutate(order_time = as.POSIXct(strptime(order_time,"%Y-%m-%d %H:%M:%S"))) %>% 
+  mutate(order_time = floor_date(order_time, unit="days")) %>% 
   # mark which medications were inpatient
   mutate(inpat_med = 
-           (hosp_admsn_time <= start_time & hosp_disch_time >= start_time)
+           (hosp_admsn_time <= order_time & hosp_disch_time >= ceiling_date(order_time) )
          ) %>% 
   replace_na(list(inpat_med = F)) 
 
-
-# write_csv(medications_df, 
-#           file = "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv")
 ## 12 minutes!! 
-
-
-write_medications_df  <- function(medications_df) {
-  write_csv(medications_df, 
-            "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv"   )
-}
-
 write_medications_df(medications_df)
 
-medications_df <- read_csv(
-  "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/medications_df.csv"
-)
+medications_df <- read_medications_df()
 
-medications_df <- medications_df %>% 
-  select(-X1)
+# Read in BSAs list
+uniqueBsas <- readBSAs()
 
-# Merge in BSA list
-uniqueMeds <- read.csv(
-  "/Users/Tarun/Documents/BIO_RESEARCH/exploratory_analysis/uniqueMeds.csv"
-)
-
-uniqueBsas <- uniqueMeds %>% 
-  select(-X) %>% 
-  rename(name = x)
-
-# Merge on the medications dictionary to find BSA's 
-## medication_id links SHC_med_de to dictionary_medications_SHC_EPIC
+# Read in the medications dictionary to find BSA's 
 med_dict_df <- con %>%
   tbl("dictionary_medications_SHC_EPIC") %>%
   select(rxcui_str, medication_id) %>% 
@@ -263,8 +293,7 @@ med_dict_df <- con %>%
   collect() %>% filter(row_number(medication_id) == 1) # keep unique medication_id
  # 3,107 medication_id values that are BSA
 
-
-# merge medications dictionary onto medications-visit data
+# Merge medications dictionary onto medications-visit data to find treatments
 med_and_dict_df <- medications_df %>% 
   left_join(med_dict_df, by = "medication_id") %>% 
   replace_na(list(bsa = 0)) %>% 
@@ -274,13 +303,13 @@ med_and_dict_df <- medications_df %>%
          -department_id, -visit_fc, -contact_date, -event_time, 
          -hosp_admsn_type_c)
 
-# for patients with treatment: make sure earliest row is selected
+# for patients with treatment: select earliest row
 treatment_df <- med_and_dict_df %>% 
   group_by(patient_id) %>% add_tally(treatment) %>% ungroup() %>% 
-  # kill any rows from patient with any treatment which was not a treatment row
+  # for patients with any treatment, kill any row which was not a treatment row
   filter( !( n > 0 & treatment==F ) ) %>% 
   group_by(patient_id) %>% 
-  summarise(     start_time = min(start_time), 
+  summarise(     order_time = min(order_time), 
                  treatment = max(treatment), 
                  hosp_admsn_time = first(hosp_admsn_time), 
                  hosp_disch_time = first(hosp_disch_time), 
@@ -288,8 +317,8 @@ treatment_df <- med_and_dict_df %>%
                  ) %>% 
   ungroup()
 
-# CHECK: patient_id==1: start_time=="2015-02-05", medication_id==25365
-# CHECK: patient_id==271815 => "2015-03-02", medication_id==96559
+# CHECK: patient_id==1: order_time=="", medication_id==
+# CHECK: patient_id==271815 => "", medication_id==
 
 write_csv(treatment_df, 
           path = "/Users/Tarun/Documents/BIO_RESEARCH/pull_data/treatment_df.csv"
@@ -351,13 +380,16 @@ dx_outcome_df <- dx_icd9 %>%
   filter( dx_autoth | dx_celiac | dx_t1dm | dx_ms | dx_rheuar | dx_graves | dx_sle ) %>% 
   arrange(patient_id, contact_date_time) %>% 
   select(patient_id, contact_date_time, starts_with("dx"))
+```
+
+
+```{r merge dx treatment}
 
 # Merge the diagnosis/outcome data onto the treatment_df table
 treatment_df <- read_csv("/Users/Tarun/Documents/BIO_RESEARCH/pull_data/treatment_df.csv")
 
 treatment_df <- treatment_df %>% 
-  select(patient_id, start_time, treatment, medication_id)
-
+  select(patient_id, order_time, treatment, medication_id)
 
 # cohort_diag_df <- treatment_df %>% 
 #   left_join(dx_outcome_df, by="patient_id") %>% 
@@ -381,7 +413,7 @@ cohort_diag_df <- treatment_df %>%
                    dx_ms=F, dx_rheuar=F, dx_graves=F, dx_sle=F) ) %>% 
   mutate( early_diag =
             !is.na(contact_date_time) & 
-            floor_date(contact_date_time, unit = "days") <= start_time + 4*dweeks(x=1) ) %>%
+            floor_date(contact_date_time, unit = "days") <= order_time + 4*dweeks(x=1) ) %>%
   replace_na( list(early_diag=F) ) 
 
 # make contact_date_time NA if early diagnosis
@@ -392,8 +424,8 @@ foo1 <- cohort_diag_df %>%
 foo2 <- cohort_diag_df %>% 
   filter(early_diag==F)
 
-cohort_diag_df <- foo1 %>% 
-  bind_rows(foo2) %>% 
+# make the diagnosis false if it's early diagnosis
+cohort_diag_df <- bind_rows(foo1, foo2) %>% 
   mutate( dx_autoth = ifelse(early_diag & dx_autoth, F, dx_autoth  )   ) %>%
   mutate( dx_celiac = ifelse(early_diag & dx_celiac, F, dx_celiac  )   ) %>%
   mutate( dx_t1dm   = ifelse(early_diag & dx_t1dm, F, dx_t1dm  )   ) %>%
@@ -404,17 +436,9 @@ cohort_diag_df <- foo1 %>%
   select(-early_diag)
   
 str(cohort_diag_df)
-# head(filter(cohort_diag_df, !is.na(contact_date_time)), n = 50 )
 
-# View(filter(cohort_diag_df, !is.na(contact_date_time) ))
-# print(paste0("Early diags: ", sum(cohort_diag_df$dx_autoth) - sum(foo$dx_autoth) ,
-#              " Out of: ", sum(cohort_diag_df$dx_autoth) ))
-# print(paste0("Early diags: ", sum(cohort_diag_df$dx_celiac) - sum(foo$dx_celiac) ,
-#              " Out of: ", sum(cohort_diag_df$dx_celiac) ))
-# print(paste0("Early diags: ", sum(cohort_diag_df$dx_t1dm) - sum(foo$dx_t1dm) ,
-#              " Out of: ", sum(cohort_diag_df$dx_t1dm) ))
-
-# Split by outcome
+# Split by outcome: 
+# for each patient, assign first diagnosis based on contact_date_time
 cohort_none_df <- cohort_diag_df %>% 
   mutate( sum_dx = dx_autoth + dx_celiac + dx_t1dm + 
             dx_ms + dx_rheuar + dx_graves + dx_sle ) %>% 
@@ -424,7 +448,6 @@ cohort_none_df <- cohort_diag_df %>%
   
 cohort_autoth_df <- cohort_diag_df %>% 
   filter(dx_autoth) %>% group_by(patient_id) %>% 
-  # for each patient, assign first diagnosis based on contact_date_time
   filter(contact_date_time == min(contact_date_time) ) %>% ungroup() %>% 
   filter(!duplicated(.)) # some diagnoses happened simultaneously
 
